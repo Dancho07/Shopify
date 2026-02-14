@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Shop {
+  id                   String      @id @default(cuid())
+  shopDomain           String      @unique
+  accessTokenEncrypted String
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  findings             Finding[]
+  actionLogs           ActionLog[]
+  contentPlans         ContentPlan[]
+  adProjects           AdProject[]
+}
+
+model Finding {
+  id             String    @id @default(cuid())
+  shopId         String
+  type           String
+  severity       String
+  entityType     String
+  entityId       String?
+  message        String
+  recommendation String
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+  shop           Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, severity])
+}
+
+model ActionLog {
+  id         String   @id @default(cuid())
+  shopId     String
+  actionType String
+  payloadJson String
+  createdAt  DateTime @default(now())
+  shop       Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+model ContentPlan {
+  id        String   @id @default(cuid())
+  shopId    String
+  month     String
+  itemsJson String
+  createdAt DateTime @default(now())
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+model AdProject {
+  id          String   @id @default(cuid())
+  shopId      String
+  productId   String
+  template    String
+  script      String
+  captionsJson String
+  status      String
+  outputUrl   String?
+  createdAt   DateTime @default(now())
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, status])
+}
