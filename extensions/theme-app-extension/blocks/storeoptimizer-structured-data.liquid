@@ -1,0 +1,29 @@
+{% if block.settings.enable_jsonld %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "{{ shop.name | escape }}",
+  "url": "{{ shop.url }}"
+}
+</script>
+{% endif %}
+
+{% if block.settings.faq_title != blank %}
+<section class="storeoptimizer-faq">
+  <h3>{{ block.settings.faq_title }}</h3>
+  <p>{{ block.settings.faq_body }}</p>
+</section>
+{% endif %}
+
+{% schema %}
+{
+  "name": "StoreOptimizer SEO + FAQ",
+  "target": "section",
+  "settings": [
+    { "type": "checkbox", "id": "enable_jsonld", "label": "Enable JSON-LD", "default": true },
+    { "type": "text", "id": "faq_title", "label": "FAQ title" },
+    { "type": "textarea", "id": "faq_body", "label": "FAQ content" }
+  ]
+}
+{% endschema %}
