@@ -7,63 +7,84 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Shop {
-  id                   String      @id @default(cuid())
-  shopDomain           String      @unique
-  accessTokenEncrypted String
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
-  findings             Finding[]
-  actionLogs           ActionLog[]
-  contentPlans         ContentPlan[]
-  adProjects           AdProject[]
+model Scan {
+  id           String       @id @default(cuid())
+  storeUrl     String
+  createdAt    DateTime     @default(now())
+  overallScore Int
+  seoScore     Int
+  convScore    Int
+  perfScore    Int
+  summaryJson  String
+  pages        PageResult[]
+  findings     Finding[]
+}
+
+model PageResult {
+  id                    String   @id @default(cuid())
+  scanId                 String
+  url                    String
+  title                  String?
+  metaDesc               String?
+  h1                     String?
+  ogJson                 String
+  altCoverage            Int
+  structuredDataPresent  Boolean
+  brokenLinksCount       Int
+  createdAt              DateTime @default(now())
+  scan                   Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId, url])
 }
 
 model Finding {
-  id             String    @id @default(cuid())
-  shopId         String
-  type           String
-  severity       String
-  entityType     String
-  entityId       String?
-  message        String
-  recommendation String
-  createdAt      DateTime  @default(now())
-  resolvedAt     DateTime?
-  shop           Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  scanId          String
+  severity        String
+  area            String
+  url             String
+  message         String
+  recommendation  String
+  howToApply      String
+  createdAt       DateTime @default(now())
+  resolvedAt      DateTime?
+  scan            Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
 
-  @@index([shopId, severity])
+  @@index([scanId, severity, area])
+}
+
+model Shop {
+  id                   String   @id @default(cuid())
+  shopDomain           String   @unique
+  accessTokenEncrypted String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  actionLogs           ActionLog[]
+  adProjects           AdProject[]
 }
 
 model ActionLog {
-  id         String   @id @default(cuid())
-  shopId     String
-  actionType String
+  id          String   @id @default(cuid())
+  shopId      String
+  actionType  String
   payloadJson String
-  createdAt  DateTime @default(now())
-  shop       Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
-}
-
-model ContentPlan {
-  id        String   @id @default(cuid())
-  shopId    String
-  month     String
-  itemsJson String
-  createdAt DateTime @default(now())
-  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
 }
 
 model AdProject {
-  id          String   @id @default(cuid())
-  shopId      String
-  productId   String
-  template    String
-  script      String
-  captionsJson String
-  status      String
-  outputUrl   String?
-  createdAt   DateTime @default(now())
-  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  storeUrl       String
+  shopIdNullable String?
+  productRef     String
+  template       String
+  format         String
+  script         String
+  captionsJson   String
+  status         String
+  outputFilePath String?
+  createdAt      DateTime @default(now())
+  shop           Shop?    @relation(fields: [shopIdNullable], references: [id], onDelete: SetNull)
 
-  @@index([shopId, status])
+  @@index([storeUrl, status])
 }

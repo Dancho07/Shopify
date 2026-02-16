@@ -1,60 +1,99 @@
-# StoreOptimizer Studio (Shopify Embedded App)
+# StoreOptimizer Link Mode
 
-StoreOptimizer Studio audits and improves SEO, conversion quality, and merchandising quality for Shopify stores, then turns findings into actionable fixes, content plans, and lightweight video ad projects.
+StoreOptimizer Link Mode is a TypeScript web app for Shopify-focused audits and improvement workflows.
 
-> White-hat only. No fake traffic, bots, or black-hat SEO tactics.
+- **Public mode (`Scan Store`)** analyzes only public storefront data (HTML, `robots.txt`, `sitemap.xml`) and **cannot modify a store**.
+- **Connected mode (`Connect Shopify`)** enables one-click apply actions through Shopify OAuth with minimal scopes.
+
+## Compliance guarantees
+
+- No black-hat SEO, no bot/fake traffic, no fake engagement.
+- Public scan uses only publicly accessible storefront pages.
+- Public scan is rate-limited and capped by page limits.
+- Crawler honors `robots.txt` disallow entries and crawl delay where available.
+- Store mutations are only available after explicit Shopify OAuth connection.
 
 ## Features
 
-- **Audit Dashboard**
-  - Product SEO checks (title quality, alt text coverage)
-  - Conversion checks (description clarity)
-  - Findings table with severity + recommendations
-  - CSV export-ready findings data from `/api/audit/results`
-- **Fixes & Suggestions**
-  - One-click product updates via GraphQL Admin API (`write_products` gated)
-  - Action logging for all applied fixes
-  - Theme App Extension block for JSON-LD and FAQ content (safe mode)
-  - Advanced theme edits intentionally disabled by default (`write_themes` optional)
-- **Traffic Helper**
-  - 30-day content planner (AI provider optional, rule-based fallback)
-  - Keyword/content support foundation via plan generation route
-  - UTM and optional external integrations can be added in `src/routes/api.ts`
-- **Video Ads Studio**
-  - Ad project creation with templates
-  - Async render queue interface
-  - FFmpeg-compatible renderer interface (default placeholder)
+### Module A — Public Scan (no auth)
 
-## Tech stack
+- URL normalization and SSRF guard (blocks localhost/internal IP ranges).
+- Shopify detection using multiple signals:
+  - `cdn.shopify.com` assets
+  - meta generator mention
+  - common `/products` or `/collections` routes
+  - JSON-LD product schema hints
+- Sitemap-driven crawl with fallback homepage scan.
+- SEO checks: title, meta description, H1, canonical/OG hints, image alt coverage, structured data presence, broken links.
+- Conversion checks: product CTA/price/variants hints, policy-link discoverability.
+- Lightweight performance snapshot (timing-based, Lighthouse-like overview).
+- Findings include severity, area, why it matters, suggested fix, and how to apply.
+- Overall + sub-score scoring (SEO / Conversion / Performance) with top 10 fixes prioritization.
 
-- Node + Express + TypeScript
-- Shopify Admin GraphQL API
-- Prisma ORM (SQLite dev, Postgres-ready with datasource switch)
-- Pluggable AI provider (`OpenAiProvider` or rule-based fallback)
-- Swappable render pipeline (`VideoRenderer` interface)
+### Module B — Improvement Pack (public)
 
-## Shopify API versioning
+- Download findings as CSV or JSON.
+- Copy pack generation:
+  - product title patterns
+  - meta description templates
+  - FAQ templates
+  - 30-day content calendar
+- Niche inference from scanned page text.
+- UTM builder endpoint for tracked links.
 
-Set API version in one place:
+### Module C — Optional Shopify connect for applying fixes
 
-- `src/config.ts` via `SHOPIFY_API_VERSION` env var.
+- Connect flow page documents required OAuth behavior/scopes.
+- Scope policy:
+  - default: `read_products`, `read_content`
+  - optional one-click apply: `write_products`
+  - advanced theme edits: `write_themes` (off by default)
+- Token storage encrypted at rest.
+- Action logging model included for before/after mutation traceability.
 
-Bump quarterly by updating `.env`/deploy environment only.
+### Module D — Video Ads Studio
 
-## Scopes policy
+- Public mode ad creation from product reference.
+- Templates implemented:
+  1. `problem-solution-cta`
+  2. `3-benefits`
+  3. `minimal-premium`
+- Format options: `9:16`, `1:1`, `16:9`.
+- Async render queue with persisted status and output path.
 
-Default scopes (minimal):
+## Routes / pages
 
-- `read_products`
-- `read_content`
-- `read_themes` (diagnostics only)
+- `/` — landing page URL input + scan flow
+- `/scan/:id` — scan dashboard and export links
+- `/connect` — OAuth/scopes guidance
+- `/ads` — ad project list
+- `/ads/new` — ad project creation
+- `/settings` — AI key + voiceover notes
 
-Optional scopes (feature-gated):
+## API routes
 
-- `write_products` for one-click fixes
-- `write_themes` for advanced mode only (explicit merchant approval + warning)
+- `POST /api/scan`
+- `GET /api/scan/:id`
+- `GET /api/scan/:id/export.json`
+- `GET /api/scan/:id/export.csv`
+- `POST /api/improvement-pack`
+- `GET /api/utm`
+- `POST /api/ads/create`
+- `POST /api/ads/render`
+- `GET /api/ads`
 
-## Local setup
+## Data model (Prisma)
+
+- `Scan`
+- `PageResult`
+- `Finding`
+- `Shop`
+- `ActionLog`
+- `AdProject`
+
+See `prisma/schema.prisma` for full fields.
+
+## Setup
 
 1. Install dependencies
 
@@ -62,80 +101,74 @@ Optional scopes (feature-gated):
 npm install
 ```
 
-2. Copy env file
+2. Create env file
 
 ```bash
 cp .env.example .env
 ```
 
-3. Run Prisma migration + client generation
+3. Set required variables
 
-```bash
-npm run prisma:migrate
-npm run prisma:generate
+```env
+DATABASE_URL="file:./dev.db"
+PORT=3000
+APP_URL="http://localhost:3000"
+TOKEN_ENCRYPTION_SECRET="replace-with-long-random-secret"
+SHOPIFY_API_VERSION="2025-01"
+SHOPIFY_SCOPES="read_products,read_content"
+OPENAI_API_KEY=""
+ENABLE_WRITE_PRODUCTS="false"
+ENABLE_ADVANCED_THEME_EDITS="false"
 ```
 
-4. Start local dev server
+4. Generate Prisma client + apply migration
+
+```bash
+npm run prisma:generate
+npm run prisma:migrate
+```
+
+5. Run app
 
 ```bash
 npm run dev
 ```
 
-## Commands
+## Testing
 
-- Install deps: `npm install`
-- Run dev: `npm run dev`
-- Run Prisma migrate: `npm run prisma:migrate`
-- Run tests: `npm test`
-- Build: `npm run build`
-- Start prod: `npm run start`
+```bash
+npm test
+npm run build
+```
 
-## Deployment notes
+## How public scan works
 
-- Use managed Postgres in production by switching Prisma datasource provider/url.
-- Set strong `TOKEN_ENCRYPTION_SECRET`.
-- Configure Shopify app URL and redirect URLs.
-- Register webhooks:
-  - `app/uninstalled`
-  - `products/update`
-  - `shop/redact`
-  - `customers/redact`
-  - `customers/data_request`
-- Ensure HTTPS and secure secret storage.
+1. Validate and normalize URL.
+2. Fetch `robots.txt` and `sitemap.xml`.
+3. Build capped URL list (default max 50).
+4. Audit pages with polite delays.
+5. Save `Scan`, `PageResult`, and `Finding` records.
+6. Compute SEO/Conversion/Performance and overall scores.
 
-## API routes
+## Why connection is required to apply fixes
 
-- `POST /api/shopify/graphql`
-- `POST /api/audit/run`
-- `GET /api/audit/results`
-- `POST /api/fix/apply`
-- `POST /api/content/generate`
-- `POST /api/ads/create`
-- `POST /api/ads/render`
-- `GET /api/ads/status`
-- `GET /api/ads/download`
-- `POST /webhooks/*`
+Public storefront URLs expose read-only HTML and metadata. Shopify admin mutations require OAuth-granted access tokens and proper scopes. Without OAuth, one-click product updates are impossible by design.
 
-## Theme app extension
+## Shopify OAuth setup notes
 
-A starter block exists at:
+- Create Shopify app in Partner dashboard.
+- Set app URL and redirect URL to your deployment.
+- Request minimal scopes first (`read_products`, `read_content`).
+- Request write scopes only when merchant enables one-click apply.
 
-- `extensions/theme-app-extension/blocks/storeoptimizer-structured-data.liquid`
+## Extending audit rules
 
-It injects optional JSON-LD organization schema and FAQ content via merchant-configurable settings.
+- Add checks in `src/audit/publicScan.ts` inside `buildFindings`.
+- Add score logic in `scoreFromFindings`.
+- Persist extra per-page fields through `PageResult` model.
 
-## Security
+## Extending ad templates
 
-- Access tokens encrypted at rest (`src/utils/crypto.ts`)
-- Minimal data model (shop + optimization data; no customer PII by default)
-- Scope-gated mutation routes
-- Webhook HMAC verification helper included
-
-## How to extend
-
-See `docs/EXTENDING.md` for adding:
-
-- new audit rules
-- new ad templates
-- richer renderer scenes
-
+- Add template key handling in `src/routes/api.ts` (`/api/ads/create` schema).
+- Update AI/rule-based generation in `src/ai/*`.
+- Update renderer scene behavior in `src/video/*`.
