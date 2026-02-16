@@ -1,17 +1,20 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createAdProjectInput } from "../src/services/adProjects.js";
 
-describe("ad project creation", () => {
-  it("builds queued ad project payload", () => {
+describe("createAdProjectInput", () => {
+  it("creates queued ad project payload", () => {
     const payload = createAdProjectInput({
-      shopId: "shop_1",
-      productId: "gid://shopify/Product/1",
-      template: "3-benefits",
-      script: "Try this product",
-      captions: ["Benefit 1", "Benefit 2"]
+      storeUrl: "https://demo-store.com",
+      productRef: "hero-product",
+      template: "problem-solution-cta",
+      format: "9:16",
+      script: "Script line",
+      captions: ["cap1", "cap2"]
     });
 
     expect(payload.status).toBe("queued");
-    expect(JSON.parse(payload.captionsJson)).toEqual(["Benefit 1", "Benefit 2"]);
+    expect(payload.storeUrl).toBe("https://demo-store.com");
+    expect(payload.format).toBe("9:16");
+    expect(JSON.parse(payload.captionsJson)).toEqual(["cap1", "cap2"]);
   });
 });
