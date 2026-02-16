@@ -6,6 +6,9 @@ import { aiProvider } from "../ai/index.js";
 import { createAdProjectInput } from "../services/adProjects.js";
 import { FfmpegRenderer } from "../video/ffmpegRenderer.js";
 import { enqueue } from "../services/jobs.js";
+import { buildShopifyOAuthUrl, createOAuthState, exchangeOAuthCode, readOAuthState, sanitizeShopDomain, shopifyGraphql } from "../services/shopify.js";
+import { decrypt, encrypt } from "../utils/crypto.js";
+import { config } from "../config.js";
 
 export const apiRouter = Router();
 const renderer = new FfmpegRenderer();
@@ -96,6 +99,113 @@ apiRouter.get("/utm", (req, res) => {
   url.searchParams.set("utm_campaign", input.campaign);
   if (input.content) url.searchParams.set("utm_content", input.content);
   res.json({ url: url.toString() });
+});
+
+apiRouter.get("/connect/start", async (req, res) => {
+  if (!config.shopifyApiKey || !config.shopifyApiSecret) {
+    return res.status(400).json({ error: "Missing SHOPIFY_API_KEY / SHOPIFY_API_SECRET in environment." });
+  }
+
+  const input = z.object({ shop: z.string().min(4) }).parse(req.query);
+  const shopDomain = sanitizeShopDomain(input.shop);
+  const state = createOAuthState(shopDomain);
+  const authUrl = buildShopifyOAuthUrl(shopDomain, state);
+  res.json({ authUrl, state, notice: "Connection is required before one-click apply actions can modify your Shopify data." });
+});
+
+apiRouter.get("/connect/callback", async (req, res) => {
+  const input = z.object({ shop: z.string(), code: z.string(), state: z.string() }).parse(req.query);
+  const shopDomain = sanitizeShopDomain(input.shop);
+
+  const state = readOAuthState(input.state);
+  if (state.shopDomain !== shopDomain || Date.now() - state.ts > 10 * 60 * 1000) {
+    return res.status(400).json({ error: "Invalid or expired OAuth state." });
+  }
+
+  const token = await exchangeOAuthCode(shopDomain, input.code);
+  await prisma.shop.upsert({
+    where: { shopDomain },
+    create: { shopDomain, accessTokenEncrypted: encrypt(token) },
+    update: { accessTokenEncrypted: encrypt(token) }
+  });
+
+  res.json({ connected: true, shopDomain });
+});
+
+apiRouter.post("/shop/apply/product", async (req, res) => {
+  const input = z.object({
+    shopDomain: z.string(),
+    productId: z.string().min(3),
+    newTitle: z.string().optional(),
+    appendDescriptionBullets: z.array(z.string()).max(8).optional(),
+    imageAltUpdates: z.array(z.object({ mediaId: z.string(), altText: z.string().min(2) })).max(12).optional()
+  }).parse(req.body);
+
+  const shopDomain = sanitizeShopDomain(input.shopDomain);
+  const shop = await prisma.shop.findUnique({ where: { shopDomain } });
+  if (!shop) return res.status(404).json({ error: "Shop is not connected. Use Connect Shopify first." });
+  if (!config.enableWriteProducts) {
+    return res.status(403).json({ error: "One-click apply disabled. Set ENABLE_WRITE_PRODUCTS=true and reconnect with write_products scope." });
+  }
+
+  const before = await shopifyGraphql<{ product: { id: string; title: string; descriptionHtml: string | null } }>(
+    shopDomain,
+    decrypt(shop.accessTokenEncrypted),
+    `query ProductForEdit($id: ID!) { product(id: $id) { id title descriptionHtml } }`,
+    { id: input.productId }
+  );
+
+  let nextDescription = before.product.descriptionHtml || "";
+  if (input.appendDescriptionBullets?.length) {
+    const bullets = input.appendDescriptionBullets.map((line) => `<li>${line}</li>`).join("");
+    nextDescription += `<ul>${bullets}</ul>`;
+  }
+
+  if (input.newTitle || input.appendDescriptionBullets?.length) {
+    await shopifyGraphql(
+      shopDomain,
+      decrypt(shop.accessTokenEncrypted),
+      `mutation UpdateProduct($input: ProductInput!) {
+        productUpdate(input: $input) {
+          userErrors { field message }
+          product { id title }
+        }
+      }`,
+      {
+        input: {
+          id: input.productId,
+          ...(input.newTitle ? { title: input.newTitle } : {}),
+          ...(input.appendDescriptionBullets?.length ? { descriptionHtml: nextDescription } : {})
+        }
+      }
+    );
+  }
+
+  if (input.imageAltUpdates?.length) {
+    await shopifyGraphql(
+      shopDomain,
+      decrypt(shop.accessTokenEncrypted),
+      `mutation UpdateMedia($productId: ID!, $media: [UpdateMediaInput!]!) {
+        productUpdateMedia(productId: $productId, media: $media) {
+          mediaUserErrors { field message }
+        }
+      }`,
+      {
+        productId: input.productId,
+        media: input.imageAltUpdates.map((item) => ({ id: item.mediaId, alt: item.altText }))
+      }
+    );
+  }
+
+  await prisma.actionLog.create({
+    data: {
+      shopId: shop.id,
+      actionType: "APPLY_PRODUCT_FIXES",
+      payloadJson: JSON.stringify({ before, request: input })
+    }
+  });
+
+  res.json({ applied: true });
 });
 
 apiRouter.post("/ads/create", async (req, res) => {

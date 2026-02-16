@@ -78,6 +78,9 @@ StoreOptimizer Link Mode is a TypeScript web app for Shopify-focused audits and 
 - `GET /api/scan/:id/export.csv`
 - `POST /api/improvement-pack`
 - `GET /api/utm`
+- `GET /api/connect/start?shop=example.myshopify.com`
+- `GET /api/connect/callback`
+- `POST /api/shop/apply/product`
 - `POST /api/ads/create`
 - `POST /api/ads/render`
 - `GET /api/ads`
@@ -115,6 +118,8 @@ PORT=3000
 APP_URL="http://localhost:3000"
 TOKEN_ENCRYPTION_SECRET="replace-with-long-random-secret"
 SHOPIFY_API_VERSION="2025-01"
+SHOPIFY_API_KEY=""
+SHOPIFY_API_SECRET=""
 SHOPIFY_SCOPES="read_products,read_content"
 OPENAI_API_KEY=""
 ENABLE_WRITE_PRODUCTS="false"
@@ -159,6 +164,8 @@ Public storefront URLs expose read-only HTML and metadata. Shopify admin mutatio
 - Create Shopify app in Partner dashboard.
 - Set app URL and redirect URL to your deployment.
 - Request minimal scopes first (`read_products`, `read_content`).
+- Use `/api/connect/start?shop=your-store.myshopify.com` to generate OAuth URL and redirect.
+- Configure Shopify callback URL to `${APP_URL}/api/connect/callback`.
 - Request write scopes only when merchant enables one-click apply.
 
 ## Extending audit rules

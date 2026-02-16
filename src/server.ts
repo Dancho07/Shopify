@@ -61,15 +61,31 @@ app.get("/scan/:id", (req, res) => {
 });
 
 app.get("/connect", (_req, res) => {
-  res.type("html").send(`<!doctype html><html><body style="font-family:Inter,Arial;padding:24px">
+  res.type("html").send(`<!doctype html><html><body style="font-family:Inter,Arial;padding:24px;max-width:760px">
   <h1>Connect Shopify</h1>
-  <p>Required for one-click apply. Public scan alone cannot modify your store.</p>
+  <p><strong>Public scan cannot modify your store. Connection is required for one-click apply.</strong></p>
   <ul>
     <li>Default scopes: read_products, read_content</li>
     <li>Optional one-click fixes: write_products</li>
     <li>Advanced theme edits (off by default): write_themes</li>
   </ul>
-  <p>OAuth endpoints are available in /webhooks and can be wired to your Shopify app config.</p>
+  <form id="connect-form">
+    <input id="shop" placeholder="example.myshopify.com" style="width:100%;padding:10px" />
+    <button style="margin-top:12px">Generate OAuth Link</button>
+  </form>
+  <pre id="out" style="background:#111;color:#0f0;padding:12px;min-height:70px"></pre>
+  <script>
+    document.getElementById('connect-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const shop = document.getElementById('shop').value;
+      const r = await fetch('/api/connect/start?shop=' + encodeURIComponent(shop));
+      const data = await r.json();
+      if (!r.ok) { out.textContent = JSON.stringify(data, null, 2); return; }
+      out.textContent = 'Open this URL to install:
+' + data.authUrl;
+      window.location.href = data.authUrl;
+    });
+  </script>
   </body></html>`);
 });
 
